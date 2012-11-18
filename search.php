@@ -1,18 +1,26 @@
 <?php
 
-define('MCL_VIEW_CONDENSED', 1);
-define('MCL_VIEW_EXPANDED', 2);
-define('MCL_VIEW_DEFAULT', MCL_VIEW_CONDENSED);
+define(  'MCL_VIEW_CONDENSED'  ,  1  );
+define(  'MCL_VIEW_EXPANDED'   ,  2  );
+define(  'MCL_VIEW_DEFAULT'    ,  MCL_VIEW_CONDENSED  );
 
 
 /****************************************************************************
  *  Handle the search parameters
  ***************************************************************************/
 
-	$q      =  (  isset($_GET[  'q'      ]) ? $_GET[  'q'      ] : ''  );
-	$debug  =  (  isset($_GET[  'debug'  ]) ? $_GET[  'debug'  ] : ''  );
-	$start  =  (  isset($_GET[  'start'  ]) ? $_GET[  'start'  ] : 0   );
-	$rows   =  (  isset($_GET[  'rows'   ]) ? $_GET[  'rows'   ] : 20  );
+	$arr_default_params = array(
+			'q'      =>  ''     ,
+			'debug'  =>  false  ,
+			'start'  =>  0      ,
+			'rows'   =>  20     ,
+		);
+
+	$arr_params = array_merge($arr_default_params, $_GET, $_POST);
+	$q      =  $arr_params[  'q'      ];
+	$debug  =  $arr_params[  'debug'  ];
+	$start  =  $arr_params[  'start'  ];
+	$rows   =  $arr_params[  'rows'   ];
 
 
 /****************************************************************************
@@ -24,10 +32,9 @@ if ($q)
 {
 
 	// Set the search url
-		$url_base = 'http://openconceptlab.org:8080/solr/db/select?wt=json&fl=*';
-		$url = $url_base . '&q=' . urlencode($q);
-		$url .= '&start=' . $start;
-		if ($rows) $url .= '&rows=' . $rows;
+		$url  = 'http://openconceptlab.org:8080/solr/db/select?wt=json&fl=*';
+		$url .= '&q=' . urlencode($q);
+		$url .= '&start=' . $start . '&rows=' . $rows;
 
 	// Perform the query
 		$ch = curl_init($url);
@@ -43,46 +50,40 @@ if ($q)
 	// Decode json
 		$r = json_decode($json);
 
-	// Build urls for next/prev results
-		$url_next = '';
-		if (  $r->response->numFound > ($start + $rows)  ) {
-			$next_start = $start + $rows;
-			$url_next = 'search.php?q=' . urlencode($q) .
-					'&start=' . $next_start .
-					'&rows=' . $rows;
-			if ($debug) $url_next .= '&debug=1';
-		}
-
-		$url_prev = '';
-		if ($start > 0) {
-			$prev_start = $start - $rows;
-			if ($prev_start < 0) $prev_start = 0;
-			$url_prev = 'search.php?q=' . urlencode($q) . 
-					'&start=' . $prev_start . 
-					'&rows=' . $rows;
-			if ($debug) $url_prev .= '&debug=1';
-		}
-
 }
 
 
 /****************************************************************************
- *	Setup the renderer
+ *	Setup the display
  ***************************************************************************/
 
-$csrr = null;
-if ($r) {
-	$csrr = new ConceptSearchResultsRenderer();
-	$csrr->debug = $debug;
-}
+	// Renderer
+		$csrr = null;
+		if ($r) {
+			$csrr = new ConceptSearchResultsRenderer();
+			$csrr->debug = $debug;
+		}
+
+	// Pagination settings
+		$cur_page           =  ceil(  ($start + 1) / $rows  );
+		$max_page           =  ceil(  $r->response->numFound / $rows  );
+		$max_start_row      =  $start + $rows;
+		$is_enabled_prev    =  ($cur_page == 1 ? false : true);
+		$is_enabled_next    =  ($cur_page == $max_page ? false : true);
+		$num_display_pages  =  10;
+		$display_page_min   =  max(1, $cur_page - ceil(($num_display_pages - 1) / 2) );
+		$display_page_max   =  min($max_page, $display_page_min + $num_display_pages - 1);
 
 
-
+/**
+ * Default object for rendering the search results. Extend this object 
+ * to create other renderers.
+ */
 class ConceptSearchResultsRenderer
 {
-	public $mode = MCL_VIEW_DEFAULT;
-	public $debug = false;
-	public $display_header = false;
+	public $mode            =  MCL_VIEW_DEFAULT;
+	public $debug           =  false;
+	public $display_header  =  false;
 
 	function render($r)
 	{
@@ -94,13 +95,17 @@ class ConceptSearchResultsRenderer
 		$this->end($r);
 	}
 
-	function start($r) {
-		echo '<table class="table table-striped table-condensed table-hover results-table">';
+	function start($r) 
+	{
+		echo '<table id="results_table" ' . 
+				'class="table table-striped table-condensed results-table">';
 	}
-	function end($r) {
-		echo '</tr>';
+	function end($r) 
+	{
+		echo '</table>';
 	}
-	function displayHeader($r) {
+	function displayHeader($r) 
+	{
 		if ($this->display_header)
 		{
 			echo '<thead>';
@@ -109,15 +114,17 @@ class ConceptSearchResultsRenderer
 			echo '<th></th>';	// star
 			echo '<th></th>';	// id
 			echo '<th>Details</th>';	// details
-			echo '<th>Source</th>';		// source
+			//echo '<th>Source</th>';		// source
 			echo '</tr>';
 			echo '</thead>';
 		}
 	}
-	function startBody($r) {
+	function startBody($r) 
+	{
 		echo '<tbody>';
 	}
-	function endBody($r) {
+	function endBody($r) 
+	{
 		echo '</tbody>';
 	}
 	function displayResults($r) 
@@ -128,7 +135,8 @@ class ConceptSearchResultsRenderer
 			$this->endConcept($r, $c);
 		}
 	}
-	function startConcept($r, $c) {
+	function startConcept($r, $c) 
+	{
 		echo '<tr>';
 	}
 	function renderConcept($r, $c) 
@@ -137,28 +145,72 @@ class ConceptSearchResultsRenderer
 		echo '<td class="col-checkbox"><input type="checkbox" /></td>';
 
 		// Star
-		echo '<td class="col-star"><img src="images/star4.png" /></td>';
+		echo '<td class="col-star"><img src="images/star4.png" alt="Star" /></td>';
 
 		// Concept ID
+		$tooltip_content = 
+				'<table>' .
+				'<tr><td>UUID:</td><td>' . 
+					substr($c->uuid, 0, floor(strlen($c->uuid) / 2) ) . 
+					'<br />' .
+					substr($c->uuid, floor(strlen($c->uuid) / 2), strlen($c->uuid) ) . 
+					'</td></tr>' .
+				'<tr><td>Created:</td><td>' . $c->timestamp . '</td></tr>' .
+				'</table>';
+
 		echo '<td class="col-conceptid overflow-ellipsis">';
-		echo '<span class="concept-id">' . 
-				(isset($c->full_id) ? str_replace('_', '-', $c->full_id) : '[full_id]') . 
-				'</span>';
+		echo '<a href="#" rel="popover" data-html="true" data-trigger="hover" data-placement="top" data-content="' . htmlentities($tooltip_content) . '" title="' . (isset($c->full_id) ? str_replace('_', '-', $c->full_id) : '[full_id]') . ' Details">';
+		echo '<span class="concept-id">';
+		echo (isset($c->full_id) ? str_replace('_', '-', $c->full_id) : '[full_id]');
+		echo '</span>';
+		echo '</a>';
 		echo '</td>';
 
-		// Name and summary
-		echo '<td class="col-name overflow-ellipsis">';
-		//echo '<span class="concept-id">' . $c->id . '</span> - ';
-		echo '<span class="preferred-concept-name">' . (isset($c->pname) ? $c->pname : '[pname]') . '</span> ';
-		echo '<span class="concept-class">[ ' . (isset($c->class) ? $c->class : '[class]') . ' / ' . 
-				(isset($c->datatype) ? $c->datatype : '[datatype]') . ' ]</span> ';
-		echo '<span class="concept-description"> - ' . (isset($c->description) ? $c->description : '') . '</span>';
-		echo '</td>';
+		// Concept details
+		echo '<td class="col-name">';
 
-		// Map codes
-		//echo '<td class="col-mapcode">' . $c->source . '</td>';
+			// Name and summary
+			echo '<div class="overflow-ellipsis">';
+			echo '<span class="preferred-concept-name">' . (isset($c->pname) ? $c->pname : '[pname]') . '</span> ';
+			echo '<span class="concept-class">[ ' . (isset($c->class) ? $c->class : '<em>class</em>') . ' / ' . 
+					(isset($c->datatype) ? $c->datatype : '<em>datatype</em>') . ' ]</span> ';
+			echo '<span class="concept-description">' . (isset($c->description) ? ' - ' . $c->description : '') . '</span>';
+			echo '</div>';
+
+			// Mappings
+			if (  $arr_elements = explode(' | ', $c->name)  ) {
+				echo '<div class="overflow-ellipsis">';
+				echo '<span class="subheading">Mappings:&nbsp;&nbsp; </span>';
+				foreach ($arr_elements as $element) {
+					echo '<span class="bubble-mapping">' . $element . '</span>';
+				}
+				echo '</div>';
+			}
+
+			// Collections
+			if (  $arr_elements = explode(' | ', $c->name)  ) {
+				echo '<div class="overflow-ellipsis">';
+				echo '<span class="subheading">Collections:&nbsp;&nbsp; </span>';
+				foreach ($arr_elements as $element) {
+					echo '<span class="bubble-collection">' . $element . '</span>';
+				}
+				echo '</div>';
+			}
+
+			// Concept Sets
+			if (  $arr_elements = explode(' | ', $c->name)  ) {
+				echo '<div class="overflow-ellipsis">';
+				echo '<span class="subheading">Concept Sets:&nbsp;&nbsp; </span>';
+				foreach ($arr_elements as $element) {
+					echo '<span class="bubble-conceptset">' . $element . '</span>';
+				}
+				echo '</div>';
+			}
+
+		echo '</td>';
 	}
-	function endConcept($r, $c) {
+	function endConcept($r, $c) 
+	{
 		echo '</tr>';
 
 		if ($this->debug) {
@@ -176,7 +228,7 @@ class ConceptSearchResultsRenderer
 	<head>
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 	<title>Search - Open Concept Lab</title>
-	
+
 	<link href="bootstrap/css/bootstrap.min.css" rel="stylesheet" type="text/css" media="screen" />
 	<style type="text/css">
 		body {
@@ -191,21 +243,24 @@ class ConceptSearchResultsRenderer
 		span.preferred-concept-name {
 			font-weight: bold;
 			color: Black;
+			font-size: 10pt;
 		}
 		span.concept-class {
 			/*font-style: italic;*/
 			/*color: #999;*/
 			color: Black;
+			font-size: 9pt;
 		}
 		span.concept-description {
 			color: #999;
+			font-size: 9pt;
 		}
 
-		td.col-checkbox { width: 15px; padding-right:0; vertical-align: middle;}
+		td.col-checkbox { width: 15px; padding-right:0; vertical-align: top;}
 		td.col-checkbox input { padding-top:0; margin-top:0;}
 		td.col-star { width: 20px; padding-left:10px;}
 		td.col-conceptid { width: 90px; }
-		td.col-name { width: *; }
+		td.col-name { /*width: *;*/ }
 		td.col-mapcode { width: 50px; }
 		td.debug { white-space: pre; }
 
@@ -213,16 +268,42 @@ class ConceptSearchResultsRenderer
 			table-layout: fixed;
 			width: 100%;
 		}
-		.results-table td {
-			/*border: 1px solid black;*/
-			font-size: 10pt;
-		}
 		.overflow-ellipsis {
     		overflow: hidden;
     		text-overflow: ellipsis;
     		white-space: nowrap;
-    		color: #999;
 		}
+		.popover-title {
+			font-weight: bold;
+		}
+		.popover-content, .popover-content td {
+			font-size: 9pt;
+		}
+
+		.subheading {
+			font-size: 9pt;
+			font-weight: 500;
+			color: #666;
+		}
+		.bubble,
+		.bubble-mapping,
+		.bubble-collection,
+		.bubble-conceptset
+		{
+			background-color: #ddd;
+			border: 1px solid #ccc;
+			padding-top: 1px;
+			padding-bottom: 1px;
+			padding-left: 6px;
+			padding-right: 6px;
+			border-radius: 5px;
+			font-size: 9pt;
+			margin-right: 3px;
+			color: #333;
+		}
+		.bubble-mapping { background-color: #bee2fa; }
+		.bubble-collection { background-color: #ffe0a7; }
+		.bubble-conceptset { background-color: #ffffcc; }
 	</style>
 	<link href="bootstrap/css/bootstrap-responsive.css" rel="stylesheet">
 
@@ -255,10 +336,10 @@ class ConceptSearchResultsRenderer
 						<a class="btn btn-link btn-small" href="signup.php">Sign Up</a>
 					</fieldset>
 				</form>
-			</div><!--/.nav-collapse -->
-		</div>
-	</div>
-</div>
+			</div><!-- .nav-collapse -->
+		</div><!-- .container -->
+	</div><!-- .navbar-inner -->
+</div><!-- .navbar -->
 
 <?php if ($debug) { ?>
 <div class="container" id="debug">
@@ -269,7 +350,7 @@ class ConceptSearchResultsRenderer
 		?>
 		</div>
 	</div>
-</div>
+</div><!-- .container #debug -->
 <hr />
 <?php } ?>
 
@@ -278,7 +359,7 @@ class ConceptSearchResultsRenderer
 	<div class="row-fluid">
 
 		<!-- Browse Panel -->
-		<div class="span2">
+		<div class="span2" id="panel-browse">
 			<ul class="nav nav-list">
 				<li class="nav-header">Dictionaries</li>
 				<li><a href="search.php?q=dict%3A*">[All Dictionaries]</a></li>
@@ -298,11 +379,11 @@ class ConceptSearchResultsRenderer
 				<li><a href="#">Community Antenatal Care</a></li>
 				<li><a href="#">More...</a></li>
 			</ul>
-		</div>
+		</div> <!-- .span2 #panel-browse -->
 
 
 		<!-- Collection Panel -->
-		<div class="span2 pull-right">
+		<div class="span2 pull-right" id="panel-collection">
         	<div class="well well-small sidebar-nav">
 				<ul class="nav nav-list">
 					<li class="nav-header">Public Collections</li>
@@ -310,7 +391,7 @@ class ConceptSearchResultsRenderer
 					<li><a href="#">Community PNC</a></li>
 					<li><a href="#">Family Planning</a></li>
 					<li><a href="#">MCL Core</a></li>
-					<li class="nav-header"><a href="#"><img src="images/star-lit4.png" /> My Starred Concepts</a></li>
+					<li class="nav-header"><a href="#"><img src="images/star-lit4.png" alt="Star" /> My Starred Concepts</a></li>
 					<li class="nav-header">My Collections</li>
 					<li><a href="#">MoTeCH Ghana ANC</a></li>
 					<li><a href="#">CARE India ANC</a></li>
@@ -318,78 +399,141 @@ class ConceptSearchResultsRenderer
 					<li><a href="#">Dimagi India</a></li>
 				</ul>
 			</div>
-		</div>
+		</div>	<!-- .span2 #panel-collection -->
 
 
-		<div class="span8">
+		<!-- Middle Panel -->
+		<div class="span8" id="panel-middle">
+
 
 			<!-- Search Bar -->
-			<div class="span12" style="text-align: center;">
-				<form action="search.php" method="get" class="form-search">
-					<fieldset>
-						<div class="input-append">
-							<input type="text" class="input-xlarge search-query" placeholder="Search" name="q" value="<?php echo $q; ?>" />
-							<button type="submit" class="btn">Search</button>
-						</div>
-					</fieldset>
-				</form>
-			</div>
+			<div class="row-fluid" id="panel-search-bar">
+				<div class="span12" style="text-align: center;">
+					<form action="search.php" method="get" class="form-search">
+						<fieldset>
+							<div class="input-append">
+								<input type="text" class="input-xxlarge search-query" placeholder="Search" name="q" value="<?php echo $q; ?>" />
+								<button type="submit" class="btn">Search</button>
+							</div>
+						</fieldset>
+					</form>
+				</div>
+			</div><!-- .row-fluid #panel-search-bar -->
+
 
 			<!-- Search Results Summary -->
-<?php   
-			if ($csrr && $r && $r->response->numFound)  
-			{
-				$range_a  =  $start + 1;
-				$range_b  =  min(  $start + $rows  ,  $r->response->numFound  );
-?>
-			<div class="well well-small" style="clear:both;">
-				Showing results <strong><?php echo $range_a; ?></strong> 
-				to <strong><?php echo $range_b; ?></strong> of
-				<?php echo $r->response->numFound; ?>. 
-<?php
-				if ($url_prev) {
-					echo '<a href="' . $url_prev . '" class="btn">&lt; Previous</a>';
+			<div class="row-fluid" id="panel-search-summary">
+				<?php   
+				if ($csrr && $r)
+				{
+					echo '<div class="well well-small" style="clear:both;">';
+					//echo '<div class="span12">';
+					if ($r->response->numFound) 
+					{
+						$range_a  =  $start + 1;
+						$range_b  =  min(  $start + $rows  ,  $r->response->numFound  );
+
+						echo 'Showing results <strong>' . $range_a . '</strong> ' .
+								'to <strong>' . $range_b . '</strong> of ' . $r->response->numFound . '.'; 
+					} else {
+						echo 'Your search did not match any concepts.';
+					}
+					echo '</div>';
 				}
-				if ($url_next) {
-					echo '<a href="' . $url_next . '" class="btn">Next &gt;</a>';
-				}
-			} else if ($csrr && $r && !$r->response->numFound) {
-				echo '<div class="well well-small" style="clear:both;">Your search did not match any concepts.</div>';
-			}
-?>
-			</div>
+				?>
+			</div><!-- .row-fluid #panel_searchbar -->
+
 
 			<!-- Search Results -->
-<?php
-			if ($csrr && $r) {
-				$csrr->render($r);
-			} else {
-				echo '<p><em>No search results</em></p>';
-			}
-?>
-		</div>
+			<div class="row-fluid" id="panel-search-results">
+				<div class="span12">
+				<?php
+					if ($csrr && $r)  {
+						$csrr->render($r);
+					}  else  {
+						echo '<p><em>No search results</em></p>';
+					}
+				?>
+				</div>
+			</div><!-- .row-fluid #panel-search-results -->
 
-	</div>
-</div>
+
+			<!-- Pagination -->
+			<div class="row-fluid" id="panel-pagination">
+				<div class="span12">
+					<div class="pagination pagination-centered">
+						<ul>
+							<?php
+								if ($is_enabled_prev) {
+									echo '<li><a href="' . buildSearchUrl(array_merge($arr_params, array('start'=>$start-$rows)), $arr_default_params) . '">';
+									echo '&laquo; Prev</a></li>';
+								} else {
+									echo '<li class="disabled"><a href="#">&laquo; Prev</a></li>';
+								}
+								if ($display_page_min > 1) {
+									echo '<li><a href="' . buildSearchUrl(array_merge($arr_params, array('start'=>0)), $arr_default_params) . '">1';
+									if ($display_page_min > 2) echo '...';
+									echo '</a></li>';
+								}
+								for ($i = $display_page_min; $i <= $display_page_max; $i++) 
+								{
+									$cur_start = ($i - 1) * $rows;
+									echo '<li ' . ($i == $cur_page ? 'class="active"' : '');
+									echo '><a href="' . buildSearchUrl(array_merge($arr_params, array('start'=>$cur_start)), $arr_default_params) . '">';
+									echo $i . '</a></li>';
+								}
+								if ($max_page > $display_page_max) {
+									$url = buildSearchUrl(array_merge($arr_params, array('start'=>($max_page-1)*$rows)), $arr_default_params);
+									$text = $max_page;
+									if ($max_page > ($display_page_max + 1)) 	$text = '...' . $text;
+									echo '<li><a href="' . $url . '">' . $text . '</a></li>';
+								}
+								if ($is_enabled_next) {
+									echo '<li><a href="' . buildSearchUrl(array_merge($arr_params, array('start'=>$max_start_row)), $arr_default_params) . '">';
+									echo 'Next &raquo;</a></li>';
+								} else {
+									echo '<li class="disabled"><a href="#">Next &raquo;</a></li>';
+								}
+							?>
+						</ul>
+					</div>	<!-- pagination -->
+				</div>	<!-- span12 -->
+			</div>	<!-- .row-fluid #panel-pagination -->
+
+		</div><!-- .span8 #panel-middle -->
+
+	</div><!-- .row-fluid -->
+</div><!-- .container-fluid -->
 
 
     <!-- Le javascript
     ================================================== -->
     <!-- Placed at the end of the document so the pages load faster -->
     <script src="bootstrap/js/jquery.js"></script>
-    <script src="bootstrap/js/bootstrap-transition.js"></script>
-    <script src="bootstrap/js/bootstrap-alert.js"></script>
-    <script src="bootstrap/js/bootstrap-modal.js"></script>
-    <script src="bootstrap/js/bootstrap-dropdown.js"></script>
-    <script src="bootstrap/js/bootstrap-scrollspy.js"></script>
-    <script src="bootstrap/js/bootstrap-tab.js"></script>
-    <script src="bootstrap/js/bootstrap-tooltip.js"></script>
-    <script src="bootstrap/js/bootstrap-popover.js"></script>
-    <script src="bootstrap/js/bootstrap-button.js"></script>
-    <script src="bootstrap/js/bootstrap-collapse.js"></script>
-    <script src="bootstrap/js/bootstrap-carousel.js"></script>
-    <script src="bootstrap/js/bootstrap-typeahead.js"></script>
+    <script src="bootstrap/js/bootstrap.min.js"></script>
+    <script src="bootstrap/js/application.js"></script>
+    <script>
+	    /*$('#results_table').tooltip({
+			selector: "a[rel=tooltip]"
+		});*/
+    </script>
 
 
 </body>
 </html>
+<?php
+
+function buildSearchUrl($arr_params, $arr_default_params=null) {
+	if (!$arr_default_params) $arr_default_params = array();
+	$url = 'search.php?';
+	$i = 0;
+	foreach ($arr_params as $k => $v) {
+		if (isset($arr_default_params[$k]) && $arr_default_params[$k] == $v) continue;
+		if ($i) $url .= '&amp;';
+		$url .= urlencode($k) . '=' . urlencode($v);
+		$i++;
+	}
+	return $url;
+}
+
+?>
