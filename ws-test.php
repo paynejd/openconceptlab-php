@@ -34,7 +34,8 @@
 	 * CONCEPT: Solr
 	 ***************************************************************************/
 
-		$url = 'http://openconceptlab.org:8080/solr/db/select?wt=json&fl=*&q=' . urlencode($dict.'_'.$concept_id);
+		$url = 'http://openconceptlab.org:8080/solr/db/select?wt=json&fl=*&q=' . 
+				urlencode('+dict:' . $dict . ' +id:' . $concept_id);
 		$json = debugCurl(
 				'1', 
 				'CONCEPT Solr', 
