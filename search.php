@@ -155,12 +155,17 @@ class ConceptSearchResultsRenderer
 					'<br />' .
 					substr($c->uuid, floor(strlen($c->uuid) / 2), strlen($c->uuid) ) . 
 					'</td></tr>' .
-				'<tr><td>Created:</td><td>' . $c->timestamp . '</td></tr>' .
+				'<tr><td>Created:</td><td>' . $c->timestamp . '</td></tr>';
+		$tooltip_content .= 
+				'<tr><td>Retired:</td><td>' . 
+				(  (isset($c->retired) && $c->retired == 'retired')  ?  'true'  :  'false'  ) . 
+				'</td></tr>';
+		$tooltip_content .= 
 				'</table>';
 
-		echo '<td class="col-conceptid overflow-ellipsis">';
+		echo '<td class="col-conceptid">';
 		echo '<a href="#" rel="popover" data-html="true" data-trigger="hover" data-placement="top" data-content="' . htmlentities($tooltip_content) . '" title="' . (isset($c->full_id) ? str_replace('_', '-', $c->full_id) : '[full_id]') . ' Details">';
-		echo '<span class="concept-id">';
+		echo '<span class="' . (isset($c->retired) && $c->retired == 'retired' ? 'retired ' : '') . 'concept-id">';
 		echo (isset($c->full_id) ? str_replace('_', '-', $c->full_id) : '[full_id]');
 		echo '</span>';
 		echo '</a>';
@@ -171,7 +176,11 @@ class ConceptSearchResultsRenderer
 
 			// Name and summary
 			echo '<div class="overflow-ellipsis">';
-			echo '<span class="preferred-concept-name">' . (isset($c->pname) ? $c->pname : '[pname]') . '</span> ';
+			echo '<span class="' . 
+					(isset($c->retired) && $c->retired == 'retired' ? 'retired' : '') . 
+					' preferred-concept-name">' . 
+					(isset($c->pname) ? $c->pname : '[pname]') . 
+					'</span> ';
 			echo '<span class="concept-class">[ ' . (isset($c->class) ? $c->class : '<em>class</em>') . ' / ' . 
 					(isset($c->datatype) ? $c->datatype : '<em>datatype</em>') . ' ]</span> ';
 			echo '<span class="concept-description">' . (isset($c->description) ? ' - ' . $c->description : '') . '</span>';
@@ -182,27 +191,55 @@ class ConceptSearchResultsRenderer
 				echo '<div class="overflow-ellipsis">';
 				echo '<span class="subheading">Mappings:&nbsp;&nbsp; </span>';
 				foreach ($arr_elements as $element) {
-					echo '<span class="bubble-mapping">' . $element . '</span>';
+					echo '<span class="bubble-mapping">' . htmlentities($element) . '</span>';
 				}
 				echo '</div>';
 			}
 
 			// Collections
+			/*
 			if (  $arr_elements = explode(' | ', $c->name)  ) {
 				echo '<div class="overflow-ellipsis">';
 				echo '<span class="subheading">Collections:&nbsp;&nbsp; </span>';
 				foreach ($arr_elements as $element) {
-					echo '<span class="bubble-collection">' . $element . '</span>';
+					echo '<span class="bubble-collection">' . htmlentities($element) . '</span>';
+				}
+				echo '</div>';
+			}
+			*/
+
+			// Concept Sets
+			if (  isset($c->set_parent) && 
+				  $arr_elements = explode(' | ', $c->set_parent)  ) 
+			{
+				echo '<div class="overflow-ellipsis">';
+				echo '<span class="subheading">Concept Sets:&nbsp;&nbsp; </span>';
+				foreach ($arr_elements as $element) {
+					echo '<span class="bubble-conceptset">' . htmlentities($element) . '</span>';
 				}
 				echo '</div>';
 			}
 
-			// Concept Sets
-			if (  $arr_elements = explode(' | ', $c->name)  ) {
+			// Questions
+			if (  isset($c->question) && 
+				  $arr_elements = explode(' | ', $c->question)  ) 
+			{
 				echo '<div class="overflow-ellipsis">';
-				echo '<span class="subheading">Concept Sets:&nbsp;&nbsp; </span>';
+				echo '<span class="subheading">Questions:&nbsp;&nbsp; </span>';
 				foreach ($arr_elements as $element) {
-					echo '<span class="bubble-conceptset">' . $element . '</span>';
+					echo '<span class="bubble-question">' . htmlentities($element) . '</span>';
+				}
+				echo '</div>';
+			}
+
+			// Answers
+			if (  isset($c->answer) && 
+				  $arr_elements = explode(' | ', $c->answer)  ) 
+			{
+				echo '<div class="overflow-ellipsis">';
+				echo '<span class="subheading">Answers:&nbsp;&nbsp; </span>';
+				foreach ($arr_elements as $element) {
+					echo '<span class="bubble-answer">' . htmlentities($element) . '</span>';
 				}
 				echo '</div>';
 			}
@@ -272,6 +309,10 @@ class ConceptSearchResultsRenderer
     		overflow: hidden;
     		text-overflow: ellipsis;
     		white-space: nowrap;
+    		font-size: 9pt;
+    		padding-top: 0px;
+    		padding-bottom: 4px;
+    		color: #999;
 		}
 		.popover-title {
 			font-weight: bold;
@@ -288,12 +329,14 @@ class ConceptSearchResultsRenderer
 		.bubble,
 		.bubble-mapping,
 		.bubble-collection,
-		.bubble-conceptset
+		.bubble-conceptset,
+		.bubble-question,
+		.bubble-answer
 		{
 			background-color: #ddd;
 			border: 1px solid #ccc;
-			padding-top: 1px;
-			padding-bottom: 1px;
+			padding-top: 2px;
+			padding-bottom: 2px;
 			padding-left: 6px;
 			padding-right: 6px;
 			border-radius: 5px;
@@ -301,9 +344,16 @@ class ConceptSearchResultsRenderer
 			margin-right: 3px;
 			color: #333;
 		}
-		.bubble-mapping { background-color: #bee2fa; }
+		.bubble-mapping    { background-color: #bee2fa; }
 		.bubble-collection { background-color: #ffe0a7; }
 		.bubble-conceptset { background-color: #ffffcc; }
+		.bubble-question   { background-color: #fbd;    }
+		.bubble-answer     { background-color: #dfa;    }
+
+		span.retired {
+			color: #933;
+			text-decoration: line-through;
+		}
 	</style>
 	<link href="bootstrap/css/bootstrap-responsive.css" rel="stylesheet">
 
