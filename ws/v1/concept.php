@@ -1,12 +1,20 @@
 <?php
 
-require_once('LocalSettings.inc.php');
-require_once(OCL_ROOT . 'fw/ConceptSearchResultsRenderer.inc.php');
+define(  'MCL_VIEW_CONDENSED'  ,  1  );
+define(  'MCL_VIEW_EXPANDED'   ,  2  );
+define(  'MCL_VIEW_DEFAULT'    ,  MCL_VIEW_CONDENSED  );
 
 
 /****************************************************************************
  *  Handle the search parameters
  ***************************************************************************/
+
+	$arr_default_params = array(
+			'q'      =>  ''     ,
+			'debug'  =>  false  ,
+			'start'  =>  0      ,
+			'rows'   =>  20     ,
+		);
 
 	$arr_params = array_merge($arr_default_params, $_GET, $_POST);
 	$q      =  $arr_params[  'q'      ];
@@ -24,68 +32,23 @@ if ($q)
 {
 
 	// Set the search url
-		$url_search  = 'http://openconceptlab.org:8080/solr/db/select?wt=json&fl=*';
-		$url_search .= '&q=' . urlencode($q);
-		$url_search .= '&start=' . $start . '&rows=' . $rows;
+		$url  = 'http://openconceptlab.org:8080/solr/db/select?wt=json&fl=*';
+		$url .= '&q=' . urlencode($q);
+		$url .= '&start=' . $start . '&rows=' . $rows;
 
 	// Perform the query
-		$ch   =  curl_init($url_search);
+		$ch = curl_init($url);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-		$json_search =  curl_exec($ch);	// Website returns json
+		$json = curl_exec($ch);
 		curl_close($ch);
-		if (!$json_search) {
-			var_dump($json_search);
-			trigger_error('curl 1 failed');
+		if (!$json) {
+			var_dump($json);
+			trigger_error('curl failed');
 			exit();
 		}
-		$r    =  json_decode($json_search);
 
-		//echo '<pre>', var_dump($r), '</pre>';
-		//exit();
-
-
-	// Load collection info
-		if (  isset($r->response->numFound)  &&  $r->response->numFound  )
-		{
-			// Grab the concept IDs
-			$criteria = '';
-			foreach ($r->response->docs as $c)
-			{
-				if ($criteria) $criteria .= ',';
-				$criteria .= $c->dict . ':' . $c->id;
-			}
-
-			// Perform the query
-			//$url_collection  =  'http://openconceptlab.org/ws/v1/collections.php?concept=' . $criteria;
-			$url_collection  =  'http://localhost/~paynejd/openconceptlab/ws/v1/collections.php?concept=' . $criteria;
-			$ch   =  curl_init($url_collection);
-			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-			$json_collection =  curl_exec($ch);
-			curl_close($ch);
-			if (!$json_collection) {
-				var_dump($json_collection);
-				trigger_error('curl 2 failed');
-				exit();
-			}
-			$collections = json_decode($json_collection);
-
-			// Add collections to results object
-			if (isset($collections->response->numFound) && $collections->response->numFound) 
-			{
-				foreach ($collections->response->docs as $coll)
-				{
-					foreach ($r->response->docs as $c)
-					{
-						if ($c->id == $coll->concept_id) {
-							if (!isset($c->collections)) $c->collections = array();
-							$c->collections[] = $coll;
-						}
-					}
-				}
-			}
-		}
-
-		//echo '<pre>', var_dump($r), '</pre>';
+	// Decode json
+		$r = json_decode($json);
 
 }
 
@@ -94,28 +57,23 @@ if ($q)
  *	Setup the display
  ***************************************************************************/
 
+	// Renderer
 		$csrr = null;
-		if (  $r  &&  isset($r->error)  ) 
-		{
-			echo '<p>Error occurred:</p>';
-			var_dump($r);
-		} 
-		elseif (  $r  &&  isset($r->response)  )
-		{
-			// Renderer
+		if ($r) {
 			$csrr = new ConceptSearchResultsRenderer();
 			$csrr->debug = $debug;
-
-			// Pagination settings
-			$cur_page           =  ceil(  ($start + 1) / $rows  );
-			$max_page           =  ceil(  $r->response->numFound / $rows  );
-			$max_start_row      =  $start + $rows;
-			$is_enabled_prev    =  ($cur_page == 1 ? false : true);
-			$is_enabled_next    =  ($cur_page == $max_page ? false : true);
-			$num_display_pages  =  10;
-			$display_page_min   =  max(1, $cur_page - ceil(($num_display_pages - 1) / 2) );
-			$display_page_max   =  min($max_page, $display_page_min + $num_display_pages - 1);
 		}
+
+	// Pagination settings
+		$cur_page           =  ceil(  ($start + 1) / $rows  );
+		$max_page           =  ceil(  $r->response->numFound / $rows  );
+		$max_start_row      =  $start + $rows;
+		$is_enabled_prev    =  ($cur_page == 1 ? false : true);
+		$is_enabled_next    =  ($cur_page == $max_page ? false : true);
+		$num_display_pages  =  10;
+		$display_page_min   =  max(1, $cur_page - ceil(($num_display_pages - 1) / 2) );
+		$display_page_max   =  min($max_page, $display_page_min + $num_display_pages - 1);
+
 
 
 ?>
@@ -185,7 +143,6 @@ if ($q)
 			font-weight: 500;
 			color: #666;
 		}
-
 		.bubble,
 		.bubble-mapping,
 		.bubble-collection,
@@ -203,20 +160,6 @@ if ($q)
 			font-size: 9pt;
 			margin-right: 3px;
 			color: #333;
-		}
-		/*
-		.bubble:hover,
-		.bubble-mapping:hover,
-		.bubble-collection:hover,
-		.bubble-conceptset:hover,
-		*/
-		.bubble-question:hover,
-		.bubble-answer:hover
-		{
-			background-color: #bee2fa;
-			border: 1px solid #99c;
-			cursor: pointer;
-			text-decoration: underline;
 		}
 		/*
 		.bubble-mapping    { background-color: #bee2fa; }
@@ -271,7 +214,7 @@ if ($q)
 	<div class="row">
 		<div class="span12">
 		<?php
-			echo '<strong>DEBUG - Solr Query:</strong><pre>' . htmlentities($url_search) . "\n" . htmlentities($url_collection) . '</pre>';
+			echo '<strong>DEBUG - Solr Query:</strong><pre>' . htmlentities($url) . '</pre>';
 		?>
 		</div>
 	</div>
@@ -292,13 +235,13 @@ if ($q)
 				<li><a href="search.php?q=%2Bdict%3APIH">PIH</a></li>
 				<li><a href="search.php?q=%2Bdict%3AAMPATH">AMPATH</a></li>
 				<li class="nav-header">Map Sources</li>
-				<li><a href="search.php?q=%2BSNOMED%5C+CT%3A%5B*+TO+*%5D">SNOMED CT</a></li>
-				<li><a href="search.php?q=%2BSNOMED%5C+NP%3A%5B*+TO+*%5D">SNOMED NP</a></li>
-				<li><a href="search.php?q=%2BICD-10-WHO%3A%5B*+TO+*%5D">ICD-10-WHO</a></li>
-				<li><a href="search.php?q=%2BICD-10-WHO%5C+2nd%3A%5B*+TO+*%5D">ICD-10-WHO 2nd</a></li>
-				<li><a href="search.php?q=%2BLOINC%3A%5B*+TO+*%5D">LOINC</a></li>
-				<li><a href="search.php?q=%2BRxNORM%3A%5B*+TO+*%5D">RxNORM</a></li>
-				<li><a href="search.php?q=%2BHL-7%5C+CVX%3A%5B*+TO+*%5D">HL-7 CVX</a></li>
+				<li><a href="#">SNOMED CT</a></li>
+				<li><a href="#">ICD-10-WHO</a></li>
+				<li><a href="#">RxNorm</a></li>
+				<li><a href="#">LOINC</a></li>
+				<li><a href="#">HL-7</a></li>
+				<li><a href="#">AMPATH</a></li>
+				<li><a href="#">PIH</a></li>
 				<li><a href="#">More...</a></li>
 				<li class="nav-header">Public Collections</li>
 				<li><a href="#">Community Antenatal Care</a></li>
@@ -384,20 +327,19 @@ if ($q)
 
 
 			<!-- Pagination -->
-			<?php if (isset($r->response) && $csrr) { ?>
 			<div class="row-fluid" id="panel-pagination">
 				<div class="span12">
 					<div class="pagination pagination-centered">
 						<ul>
 							<?php
 								if ($is_enabled_prev) {
-									echo '<li><a href="' . ConceptSearchResultsRenderer::buildSearchUrl(array_merge($arr_params, array('start'=>$start-$rows)), $arr_default_params) . '">';
+									echo '<li><a href="' . buildSearchUrl(array_merge($arr_params, array('start'=>$start-$rows)), $arr_default_params) . '">';
 									echo '&laquo; Prev</a></li>';
 								} else {
 									echo '<li class="disabled"><a href="#">&laquo; Prev</a></li>';
 								}
 								if ($display_page_min > 1) {
-									echo '<li><a href="' . ConceptSearchResultsRenderer::buildSearchUrl(array_merge($arr_params, array('start'=>0)), $arr_default_params) . '">1';
+									echo '<li><a href="' . buildSearchUrl(array_merge($arr_params, array('start'=>0)), $arr_default_params) . '">1';
 									if ($display_page_min > 2) echo '...';
 									echo '</a></li>';
 								}
@@ -405,17 +347,17 @@ if ($q)
 								{
 									$cur_start = ($i - 1) * $rows;
 									echo '<li ' . ($i == $cur_page ? 'class="active"' : '');
-									echo '><a href="' . ConceptSearchResultsRenderer::buildSearchUrl(array_merge($arr_params, array('start'=>$cur_start)), $arr_default_params) . '">';
+									echo '><a href="' . buildSearchUrl(array_merge($arr_params, array('start'=>$cur_start)), $arr_default_params) . '">';
 									echo $i . '</a></li>';
 								}
 								if ($max_page > $display_page_max) {
-									$url = ConceptSearchResultsRenderer::buildSearchUrl(array_merge($arr_params, array('start'=>($max_page-1)*$rows)), $arr_default_params);
+									$url = buildSearchUrl(array_merge($arr_params, array('start'=>($max_page-1)*$rows)), $arr_default_params);
 									$text = $max_page;
 									if ($max_page > ($display_page_max + 1)) 	$text = '...' . $text;
 									echo '<li><a href="' . $url . '">' . $text . '</a></li>';
 								}
 								if ($is_enabled_next) {
-									echo '<li><a href="' . ConceptSearchResultsRenderer::buildSearchUrl(array_merge($arr_params, array('start'=>$max_start_row)), $arr_default_params) . '">';
+									echo '<li><a href="' . buildSearchUrl(array_merge($arr_params, array('start'=>$max_start_row)), $arr_default_params) . '">';
 									echo 'Next &raquo;</a></li>';
 								} else {
 									echo '<li class="disabled"><a href="#">Next &raquo;</a></li>';
@@ -425,7 +367,6 @@ if ($q)
 					</div>	<!-- pagination -->
 				</div>	<!-- span12 -->
 			</div>	<!-- .row-fluid #panel-pagination -->
-			<?php } ?>
 
 		</div><!-- .span8 #panel-middle -->
 
@@ -448,3 +389,19 @@ if ($q)
 
 </body>
 </html>
+<?php
+
+function buildSearchUrl($arr_params, $arr_default_params=null) {
+	if (!$arr_default_params) $arr_default_params = array();
+	$url = 'search.php?';
+	$i = 0;
+	foreach ($arr_params as $k => $v) {
+		if (isset($arr_default_params[$k]) && $arr_default_params[$k] == $v) continue;
+		if ($i) $url .= '&amp;';
+		$url .= urlencode($k) . '=' . urlencode($v);
+		$i++;
+	}
+	return $url;
+}
+
+?>
